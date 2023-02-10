@@ -253,6 +253,12 @@ protected:
 	 */
 	// virtual void initialize_DATA_pck_wth_UDP();
 	virtual void init_Packet_UDP();
+    /**
+     * Send buffer contents to a given descriptor
+     *
+     * The implementation calls write(desc, buf, nbyte) from unistd.h
+     */
+    virtual ssize_t send_buf(int desc, const void *buf, size_t nbyte); 
 	/**
 	 * Close the socket connection in the case the communication take place with
 	 * socket, otherwise stop the execution of the process, so force the

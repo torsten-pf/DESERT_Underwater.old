@@ -148,10 +148,10 @@ uwApplicationModule::command(int argc, const char *const *argv)
 				// The communication take place with the use of sockets
 				if (useTCP()) {
 					// Generate DATA packets using TCP connection
-					uwApplicationModule::openConnectionTCP();
+					openConnectionTCP();
 				} else {
 					// Generate DATA packets using UDP connection
-					uwApplicationModule::openConnectionUDP();
+					openConnectionUDP();
 				}
 			}
 			return TCL_OK;
@@ -403,7 +403,7 @@ uwApplicationModule::statistics(Packet *p)
 		out_log << std::endl;
 	}
 	if (clnSockDescr) {
-		write(clnSockDescr, uwApph->payload_msg, (size_t)uwApph->payload_size());
+		send_buf(clnSockDescr, uwApph->payload_msg, (size_t)uwApph->payload_size());
 	}
 	Packet::free(p);
 } // end statistics method
@@ -674,3 +674,10 @@ uwApplicationModule::uwSendTimerAppl::expire(Event *e)
 		}
 	}
 } // end expire();
+
+ssize_t 
+uwApplicationModule::send_buf(int desc, const void *buf, size_t nbyte)
+{
+    // call write() from unistd.h
+    return write(desc, buf, nbyte);
+} // end send();
