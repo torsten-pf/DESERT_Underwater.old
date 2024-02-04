@@ -53,8 +53,6 @@ set opt(exp_ID)       1   ;# Experiment ID
 set opt(rngstream)    1   ;#  Random generator stream
 
 set opt(app_pos_port_base)  %$%{TMPL_APP_POS_PORT_BASE}  ;# UDP position socket port (port = app_pos_port_base + node_id)
-set opt(app_send_port_base)  %$%{TMPL_APP_SEND_PORT_BASE}  ;# UDP socket port for sending received data (port = app_send_port_base + node_id)
-set opt(app_send_host) "%$%{TMPL_APP_SEND_HOST}"
 
 #####################
 # Library Loading   #
@@ -317,8 +315,6 @@ proc createNode { node_id dest_id x y z} {
     if {$opt(AppSocket) == 1} {
         $app_ setSocketProtocol $opt(protocol)
         $app_ set Socket_Port_ [expr $opt(app_port_base) + $node_id]
-		# $app_ set destPort_ [expr $opt(app_send_port_base) + $node_id]
-		# $app_ set destAddr_ $opt(app_send_host)
 		$app_ set PositionReceivePort [expr $opt(app_pos_port_base) + $node_id]
     } else {
       $app_ setSocketProtocol "NONE"

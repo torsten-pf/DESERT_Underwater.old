@@ -55,7 +55,7 @@ class CustomTemplate(Template):
 
 
 HOST = "127.0.0.1"  # The server's hostname or IP address
-UW_APP_TCP_PORT_BASE = 4000
+UW_APP_PORT_BASE = 4000
 NUM_SEND_NODES = 2
 UW_APP_UDP_POS_PORT_BASE = 5000
 
@@ -144,11 +144,11 @@ def recv_send_worker(id: int, send_interval: int):
     """
     global last_send_dt
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:                
-        logger.info(f"Node {id}: connecting to {(HOST, UW_APP_TCP_PORT_BASE+id)}")
-        #s.connect((HOST, UW_APP_TCP_PORT_BASE+id))
-        if not connect_socket(s, (HOST, UW_APP_TCP_PORT_BASE+id)):
+        logger.info(f"Node {id}: connecting to {(HOST, UW_APP_PORT_BASE+id)}")
+        #s.connect((HOST, UW_APP_PORT_BASE+id))
+        if not connect_socket(s, (HOST, UW_APP_PORT_BASE+id)):
             return
-        logger.debug(f"Node {id} connected to {(HOST, UW_APP_TCP_PORT_BASE+id)}")
+        logger.debug(f"Node {id} connected to {(HOST, UW_APP_PORT_BASE+id)}")
         s.setblocking(0)
         msg = bytes(f"Message from node {id}", encoding="utf-8")
         send_timer = RepeatTimer(interval=send_interval, function=_send_data_nonblocking, args=(s,id,msg))
@@ -158,7 +158,7 @@ def recv_send_worker(id: int, send_interval: int):
             readable, _, _ = select.select([s], [], [], 5.0)
             success, data = _recv_data(readable)
             if not success:
-                logger.warning(f"Node {id}: disconnected from {(HOST, UW_APP_TCP_PORT_BASE+id)}")
+                logger.warning(f"Node {id}: disconnected from {(HOST, UW_APP_PORT_BASE+id)}")
                 break
             if data:
                 n = datetime.now()
@@ -166,14 +166,13 @@ def recv_send_worker(id: int, send_interval: int):
         send_timer.cancel()  
 
 
-
 pos_data = {
     "geodetic": False,
     "x": 0.0,
     "y": 0.0,
-    "z": 1000.0,
+    "z": 100.0,
 }
-
+speed = { "x": 1.0, "y": 0.0, "z": 1.5 }
 
 STOP_POSITION_WORKER = False
 
@@ -183,13 +182,23 @@ def pos_worker(id, host, port):
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
         logger.info(f"Sending position data for node  {id} to {(host, port)}")
         s.setblocking(False)
+        last_pos_update = 0.0
         while not STOP_POSITION_WORKER:            
             try:
-                logger.debug(f"Sending position for node  {id} ...")
+                now_dt = datetime.utcnow()
+                now = time.mktime(now_dt.timetuple()) + now_dt.microsecond / 1e6
+                if last_pos_update > 0.0:
+                    deltaT = now - last_pos_update
+                    if deltaT > 0.0:
+                        pos_data["x"] += deltaT * speed["x"]
+                        pos_data["y"] += deltaT * speed["y"]
+                        pos_data["z"] += deltaT * speed["z"]
+                last_pos_update = now
+                logger.debug(f"Sending position for node {id} ...")
                 packed_data = struct.pack("<?ddd", pos_data["geodetic"], pos_data["x"], pos_data["y"], pos_data["z"])
                 s.sendto(packed_data, (host, port))
             except Exception as e:
-                logger.error(f"Error sending position data for node {id}: {e}")
+                logger.error(f"Error sending position data for node {id}: {e}", exc_info=True)
             time.sleep(5.0)
         logger.info(f"Sending position data for node  {id} stopped")
 
@@ -200,10 +209,7 @@ def output_reader(proc, filename_out, filename_err):
     file_err = open(filename_err, 'w')
     os.set_blocking(proc.stdout.fileno(), False)
     os.set_blocking(proc.stderr.fileno(), False)
-    # print(dir(proc.stdout))
     while (proc.returncode == None):
-        # if remove_ansi_escape_sequences_in_file:
-        # byte = proc.stdout.read(1)
         line = proc.stdout.readline()
         if line:
             sys.stdout.buffer.write(line)
@@ -212,7 +218,6 @@ def output_reader(proc, filename_out, filename_err):
                 file_out.buffer.write(ansi_escape_8bit.sub(b'', line))
             else:
                 file_out.buffer.write(line)
-            
             continue
         #else:
         #    break
@@ -221,6 +226,7 @@ def output_reader(proc, filename_out, filename_err):
             logger.error(line.decode())
             file_err.buffer.write(line)
             continue
+        # sleep only if no data was read from both
         time.sleep(0.2)
     logger.info("output_reader(): observed process terminated, closing files")
     file_out.close()
@@ -245,7 +251,7 @@ ns $START_SCRIPT
 
 
 def main():    
-    argparser = ArgumentParser(description='Run network example with node position updates, see uwAppPos_UDP.tmpl for configuration.')
+    argparser = ArgumentParser(description='Run network example with node position updates, see uwAppPos.tmpl for configuration.')
     argparser.add_argument('-n', '--num-nodes', type=int, default=NUM_SEND_NODES, help='Number of sending nodes')
     argparser.add_argument('-t', '--run-time', type=int, default=15, help='Run simulation for given number of seconds')
     argparser.add_argument('-v', '--verbose', action='count', default=0, help="Increase Logger output level, up to three times")
@@ -255,19 +261,21 @@ def main():
     
     logger.setLevel((logging.ERROR, logging.WARN, logging.INFO, logging.DEBUG)[min(args.verbose, 3)])
 
+    script = 'uwAppPos'
     # create ns2 tcl script
-    with open('uwAppPos_UDP.tmpl', 'rt') as f:
+    with open(f'{script}.tmpl', 'rt') as f:
         s = CustomTemplate(f.read())
-        out = s.substitute(TMPL_NO_SENDERS=args.num_nodes, 
+        out = s.substitute(TMPL_NO_SENDERS=args.num_nodes,
+                           TMPL_PROTOCOL="tcp",
                            TMPL_STOPTIME=args.run_time, 
-                           TMPL_APP_PORT_BASE=UW_APP_TCP_PORT_BASE, 
+                           TMPL_APP_PORT_BASE=UW_APP_PORT_BASE, 
                            TMPL_APP_POS_PORT_BASE=UW_APP_UDP_POS_PORT_BASE)
-        with open('uwAppPos_UDP.tcl', 'wt') as f1:
+        with open(f'{script}.tcl', 'wt') as f1:
             f1.write(out)
                
     # create n2 start script
     s = CustomTemplate(start_script_template)
-    out = s.substitute(BUILD_DIR=args.build_dir, START_SCRIPT='uwAppPos_UDP.tcl')
+    out = s.substitute(BUILD_DIR=args.build_dir, START_SCRIPT=f'{script}.tcl')
     with open('run.sh', 'wt') as f:
         f.write(out)
     # start process

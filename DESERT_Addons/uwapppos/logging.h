@@ -20,7 +20,7 @@ namespace ConsoleColours
 
 };
 
-#define LOG_MSG(color, msg) std::cout << color << msg << ConsoleColours::Reset << endl;
+#define LOG_MSG(color, msg) std::cout << color << msg << ConsoleColours::Reset << std::endl;
 
 #define LOG_MSG_ONCE(color, msg)       \
 	{                                  \
