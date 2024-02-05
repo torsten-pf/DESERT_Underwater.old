@@ -181,6 +181,7 @@ uwApplicationModule::handleTCPclient(int clnSock)
 		for (int i = 0; i < MAX_LENGTH_PAYLOAD; i++) {
 			buffer_msg[i] = 0;
 		}
+		// Todo: read header (start char + payload size) - little endian preferred
 		if ((recvMsgSize = read(clnSock, buffer_msg, MAX_READ_LEN)) < 0) {
 			if (debug_ >= 0)
 				std::cout << getEpoch() << "::" << NOW
@@ -208,6 +209,7 @@ uwApplicationModule::handleTCPclient(int clnSock)
 				for (int i = 0; i < recvMsgSize; i++) {
 					cout << buffer_msg[i];
 				}
+				std::cout << std::endl;
 			}
 			if (logging)
 				out_log << left << getEpoch() << "::" << NOW
